@@ -38,4 +38,12 @@ interface JiraApiService {
     // Get all projects
     @GET("rest/api/3/project")
     suspend fun getAllProjects(): Response<List<JiraProjectInfo>>
+    
+    // Search for issues using JQL (migrated to new API endpoint)
+    @GET("rest/api/3/search/jql")
+    suspend fun searchIssues(
+        @Query("jql") jql: String,
+        @Query("fields") fields: String = "summary,key,issuetype,project,status",
+        @Query("maxResults") maxResults: Int = 20
+    ): Response<JiraSearchResponse>
 }

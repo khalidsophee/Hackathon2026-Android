@@ -181,3 +181,29 @@ data class UpdateIssueFields(
 data class Resolution(
     val name: String = "Pending"
 )
+
+// Search Response Models
+data class JiraSearchResponse(
+    val issues: List<JiraIssueSearchResult>,
+    val total: Int,
+    val maxResults: Int,
+    val startAt: Int
+)
+
+data class JiraIssueSearchResult(
+    val id: String,
+    val key: String,
+    val fields: JiraIssueSearchFields
+)
+
+data class JiraIssueSearchFields(
+    val summary: String,
+    val issuetype: JiraIssueType,
+    val project: JiraProject,
+    val status: JiraStatus? = null
+)
+
+data class JiraStatus(
+    val name: String,
+    val id: String? = null
+)

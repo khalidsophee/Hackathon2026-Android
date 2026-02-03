@@ -11,8 +11,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.LaunchedEffect
 import bqe.automation.hackathon_feb2026.di.AppModule
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,24 +84,129 @@ fun JiraIntegrationScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Issue Key Input
-        OutlinedTextField(
-            value = issueKeyInput,
-            onValueChange = { issueKeyInput = it },
-            label = { Text("Jira Issue Key (e.g., AND-7709)") },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = uiState.jiraConfigured && !uiState.isLoading,
-            placeholder = { Text("AND-7709") }
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Button(
-            onClick = { viewModel.fetchStory(issueKeyInput) },
-            enabled = issueKeyInput.isNotBlank() && uiState.jiraConfigured && !uiState.isLoading,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Fetch Story")
+        // Search Box with Autocomplete Dropdown
+        if (uiState.jiraConfigured) {
+            var expanded by remember { mutableStateOf(false) }
+            
+            // Debounce search - only search after user stops typing for 500ms
+            LaunchedEffect(issueKeyInput) {
+                if (issueKeyInput.isNotBlank() && issueKeyInput.length >= 2) {
+                    kotlinx.coroutines.delay(500) // Wait 500ms after user stops typing
+                    viewModel.searchIssues(issueKeyInput)
+                    expanded = true
+                } else if (issueKeyInput.isBlank()) {
+                    viewModel.searchIssues("")
+                    expanded = false
+                }
+            }
+            
+            ExposedDropdownMenuBox(
+                expanded = expanded && uiState.searchResults.isNotEmpty(),
+                onExpandedChange = { expanded = it }
+            ) {
+                OutlinedTextField(
+                    value = issueKeyInput,
+                    onValueChange = { 
+                        issueKeyInput = it
+                        expanded = false // Close dropdown when typing
+                    },
+                    label = { Text("Search Jira Issues (e.g., AND-7709 or search text)") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    enabled = !uiState.isLoading,
+                    placeholder = { Text("Type to search...") },
+                    trailingIcon = {
+                        if (uiState.isSearching) {
+                            Box(modifier = Modifier.size(20.dp)) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        } else {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                        }
+                    },
+                    singleLine = true
+                )
+                
+                ExposedDropdownMenu(
+                    expanded = expanded && uiState.searchResults.isNotEmpty(),
+                    onDismissRequest = { expanded = false }
+                ) {
+                    uiState.searchResults.forEach { result ->
+                        DropdownMenuItem(
+                            text = {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = result.key,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                            shape = MaterialTheme.shapes.small
+                                        ) {
+                                            Text(
+                                                text = result.fields.issuetype.name,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = result.fields.summary,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (result.fields.status != null) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Status: ${result.fields.status.name}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                issueKeyInput = result.key
+                                expanded = false
+                                viewModel.fetchStory(result.key)
+                            }
+                        )
+                    }
+                    
+                    if (uiState.searchResults.isEmpty() && issueKeyInput.isNotBlank() && !uiState.isSearching) {
+                        DropdownMenuItem(
+                            text = { Text("No results found") },
+                            onClick = { expanded = false },
+                            enabled = false
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Manual fetch button (optional - can also click on dropdown item)
+            Button(
+                onClick = { viewModel.fetchStory(issueKeyInput) },
+                enabled = issueKeyInput.isNotBlank() && uiState.jiraConfigured && !uiState.isLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Fetch Selected Issue")
+            }
         }
         
         // AI Status Indicator - Groq is always available (free service)

@@ -342,4 +342,47 @@ class JiraRepository(
             |$parentLink
         """.trimMargin()
     }
+    
+    suspend fun searchIssues(query: String): Result<List<JiraIssueSearchResult>> {
+        return try {
+            // Build JQL query - search by key or summary
+            // If query looks like a key (e.g., "AND-123"), search by key
+            // Otherwise, search by summary text
+            val jql = if (query.matches(Regex("^[A-Z]+-\\d+$", RegexOption.IGNORE_CASE))) {
+                // Exact key match
+                "key = \"$query\""
+            } else if (query.matches(Regex("^[A-Z]+-", RegexOption.IGNORE_CASE))) {
+                // Partial key match (e.g., "AND-")
+                "key ~ \"$query*\" ORDER BY key DESC"
+            } else {
+                // Search in summary
+                "summary ~ \"$query*\" OR text ~ \"$query*\" ORDER BY updated DESC"
+            }
+            
+            println("=== SEARCHING JIRA ISSUES ===")
+            println("Query: $query")
+            println("JQL: $jql")
+            
+            val response = jiraApiService.searchIssues(
+                jql = jql,
+                fields = "summary,key,issuetype,project,status",
+                maxResults = 20
+            )
+            
+            if (response.isSuccessful && response.body() != null) {
+                val searchResponse = response.body()!!
+                println("Found ${searchResponse.issues.size} issues (total: ${searchResponse.total})")
+                Result.success(searchResponse.issues)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                val errorMessage = "Failed to search issues: ${response.code()} ${response.message()}. Error: $errorBody"
+                println("❌ $errorMessage")
+                Result.failure(Exception(errorMessage))
+            }
+        } catch (e: Exception) {
+            println("❌ Exception during search: ${e.message}")
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
 }

@@ -20,7 +20,10 @@ data class JiraUiState(
     val createdTestCases: List<CreatedTestCase> = emptyList(),
     val jiraConfigured: Boolean = false,
     val usingAI: Boolean = false,
-    val availableProjects: List<bqe.automation.hackathon_feb2026.data.model.JiraProjectInfo> = emptyList()
+    val availableProjects: List<bqe.automation.hackathon_feb2026.data.model.JiraProjectInfo> = emptyList(),
+    val searchQuery: String = "",
+    val searchResults: List<bqe.automation.hackathon_feb2026.data.model.JiraIssueSearchResult> = emptyList(),
+    val isSearching: Boolean = false
 )
 
 class JiraViewModel(
@@ -95,6 +98,44 @@ class JiraViewModel(
         }
     }
     
+    fun searchIssues(query: String) {
+        if (!_uiState.value.jiraConfigured) {
+            _uiState.value = _uiState.value.copy(error = "Please configure Jira first")
+            return
+        }
+        
+        if (query.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                searchQuery = "",
+                searchResults = emptyList(),
+                isSearching = false
+            )
+            return
+        }
+        
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                searchQuery = query,
+                isSearching = true,
+                error = null
+            )
+            
+            repository.searchIssues(query)
+                .onSuccess { results: List<bqe.automation.hackathon_feb2026.data.model.JiraIssueSearchResult> ->
+                    _uiState.value = _uiState.value.copy(
+                        searchResults = results,
+                        isSearching = false
+                    )
+                }
+                .onFailure { error: Throwable ->
+                    _uiState.value = _uiState.value.copy(
+                        isSearching = false,
+                        error = error.message ?: "Failed to search issues"
+                    )
+                }
+        }
+    }
+    
     fun fetchStory(issueKey: String) {
         if (!_uiState.value.jiraConfigured) {
             _uiState.value = _uiState.value.copy(error = "Please configure Jira first")
@@ -102,7 +143,12 @@ class JiraViewModel(
         }
         
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                error = null,
+                searchQuery = "",
+                searchResults = emptyList()
+            )
             
             repository.getStory(issueKey)
                 .onSuccess { issue ->
