@@ -12,8 +12,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.ExperimentalMaterial3Api
 import bqe.automation.hackathon_feb2026.di.AppModule
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JiraIntegrationScreen(
     modifier: Modifier = Modifier,
@@ -270,7 +272,14 @@ fun JiraIntegrationScreen(
             
             // Project selection for test cases
             val storyProjectKey = uiState.story?.fields?.project?.key ?: "AND"
-            var testCaseProjectKey by remember { mutableStateOf("XRM") }
+            val availableProjects = uiState.availableProjects
+            var testCaseProjectKey by remember { mutableStateOf("TCM-XRAY (TC)") }
+            var expanded by remember { mutableStateOf(false) }
+            
+            // Validate issue type
+            val issueType = uiState.story?.fields?.issuetype?.name?.lowercase() ?: ""
+            val isStory = issueType == "story"
+            
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -280,28 +289,119 @@ fun JiraIntegrationScreen(
                 )
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Create Test Cases in Jira",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = testCaseProjectKey,
-                        onValueChange = { testCaseProjectKey = it.uppercase() },
-                        label = { Text("Project Key (e.g., XRM)") },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("XRM") },
-                        singleLine = true
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Create Test Cases in Jira",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        TextButton(
+                            onClick = { viewModel.fetchAllProjects() },
+                            enabled = !uiState.isLoading
+                        ) {
+                            Text("📋 Refresh")
+                        }
+                    }
+                    
+                    // Show warning if not a Story
+                    val currentStory = uiState.story
+                    if (currentStory != null && !isStory) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Text(
+                                text = "⚠️ Test cases can only be added to Stories. Current issue type: '${currentStory.fields.issuetype.name}'",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Project Dropdown
+                    if (availableProjects.isNotEmpty()) {
+                        ExposedDropdownMenuBox(
+                            expanded = expanded,
+                            onExpandedChange = { expanded = !expanded }
+                        ) {
+                            OutlinedTextField(
+                                value = testCaseProjectKey,
+                                onValueChange = { testCaseProjectKey = it },
+                                readOnly = true,
+                                label = { Text("Select Project") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                availableProjects.forEach { project ->
+                                    DropdownMenuItem(
+                                        text = { 
+                                            Column {
+                                                Text(
+                                                    text = project.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "Key: ${project.key}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            testCaseProjectKey = project.name
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Fallback to text field if projects not loaded
+                        OutlinedTextField(
+                            value = testCaseProjectKey,
+                            onValueChange = { testCaseProjectKey = it },
+                            label = { Text("Project Name or Key (e.g., TCM-XRAY (TC) or TC)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("TCM-XRAY (TC)") },
+                            singleLine = true
+                        )
+                    }
+                    Text(
+                        text = "Test cases will be created with steps, linked to the story, and set to 'Pending' resolution (Xray automation)",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                     Text(
-                        text = "Test cases will be created in the specified project with steps and execution details",
+                        text = "Note: Project key will be auto-cleaned (e.g., 'TCM-XRAY (TC)' → 'TCM'). Use the actual project key from Jira.",
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Text(
+                        text = "💡 Click 'List Projects' to see all available projects in your Jira instance (check Logcat for output)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                     if (uiState.story != null) {
                         Text(
-                            text = "💡 Tip: If XRM project doesn't exist, try using '$storyProjectKey' (from the story) or verify the project key in Jira",
+                            text = "💡 Tip: If project doesn't exist, try using '$storyProjectKey' (from the story) or verify the project key in Jira",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 4.dp)

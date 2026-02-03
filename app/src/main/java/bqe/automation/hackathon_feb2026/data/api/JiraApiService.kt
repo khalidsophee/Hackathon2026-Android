@@ -21,4 +21,21 @@ interface JiraApiService {
     suspend fun getTestCase(
         @Path("issueKey") testCaseKey: String
     ): Response<JiraIssue>
+    
+    // Link test cases to parent issue (for Xray "Tests" relationship)
+    @POST("rest/api/3/issueLink")
+    suspend fun linkIssue(
+        @Body request: IssueLinkRequest
+    ): Response<Unit>
+    
+    // Update issue fields (e.g., resolution, test steps)
+    @PUT("rest/api/3/issue/{issueKey}")
+    suspend fun updateIssue(
+        @Path("issueKey") issueKey: String,
+        @Body request: UpdateIssueRequest
+    ): Response<Unit>
+    
+    // Get all projects
+    @GET("rest/api/3/project")
+    suspend fun getAllProjects(): Response<List<JiraProjectInfo>>
 }

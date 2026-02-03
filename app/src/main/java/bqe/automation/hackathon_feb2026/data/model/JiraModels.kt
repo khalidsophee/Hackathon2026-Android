@@ -103,6 +103,14 @@ data class JiraProject(
     val name: String
 )
 
+// Project Info for listing all projects
+data class JiraProjectInfo(
+    val id: String,
+    val key: String,
+    val name: String,
+    val projectTypeKey: String? = null
+)
+
 // Test Case Creation Request
 data class CreateTestCaseRequest(
     val fields: TestCaseFields
@@ -144,4 +152,32 @@ data class GeneratedTestCase(
     val steps: List<String>,
     val expectedResult: String,
     val priority: String = "Medium"
+)
+
+// Issue Link Request (for linking test cases to parent issue)
+data class IssueLinkRequest(
+    val type: IssueLinkType,
+    val inwardIssue: IssueKey,
+    val outwardIssue: IssueKey
+)
+
+data class IssueLinkType(
+    val name: String = "Tests" // Xray uses "Tests" relationship
+)
+
+data class IssueKey(
+    val key: String
+)
+
+// Update Issue Request (for setting resolution, test steps, etc.)
+data class UpdateIssueRequest(
+    val fields: UpdateIssueFields
+)
+
+data class UpdateIssueFields(
+    val resolution: Resolution? = null
+)
+
+data class Resolution(
+    val name: String = "Pending"
 )
