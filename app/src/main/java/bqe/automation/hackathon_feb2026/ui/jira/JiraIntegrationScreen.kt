@@ -1,6 +1,8 @@
 package bqe.automation.hackathon_feb2026.ui.jira
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -18,7 +20,7 @@ fun JiraIntegrationScreen(
     viewModel: JiraViewModel = remember { AppModule.createJiraViewModel() }
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showConfigDialog by remember { mutableStateOf(!uiState.jiraConfigured) }
+    var showConfigDialog by remember { mutableStateOf(false) }
     var issueKeyInput by remember { mutableStateOf("") }
     var showTestCodeDialog by remember { mutableStateOf(false) }
     
@@ -28,20 +30,20 @@ fun JiraIntegrationScreen(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text(
-            text = "Jira Test Case Generator",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        
-        // Configuration Section
-        if (!uiState.jiraConfigured) {
-            Button(
-                onClick = { showConfigDialog = true },
-                modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Jira Test Case Generator",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            TextButton(
+                onClick = { showConfigDialog = true }
             ) {
-                Text("Configure Jira Connection")
+                Text("Use Other User")
             }
         }
         
@@ -67,6 +69,71 @@ fun JiraIntegrationScreen(
             Text("Fetch Story")
         }
         
+        // AI Status Indicator - Groq is always available (free service)
+        val isAIConfigured = bqe.automation.hackathon_feb2026.data.network.NetworkModule.openAIApiService != null
+        if (!isAIConfigured) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⚠️",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "AI (Groq) - Free LLM Available",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "AI test case generation is enabled using Groq's free service. Optional: Add API key for better performance (get free key at console.groq.com)",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "✅",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text(
+                        text = "AI (Groq) is configured - Test cases will be generated using free AI",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+        
         // Loading Indicator
         if (uiState.isLoading) {
             CircularProgressIndicator(
@@ -86,11 +153,21 @@ fun JiraIntegrationScreen(
                     containerColor = MaterialTheme.colorScheme.errorContainer
                 )
             ) {
-                Text(
-                    text = error,
-                    modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    if (error.contains("API Key", ignoreCase = true) || error.contains("401", ignoreCase = true)) {
+                        Text(
+                            text = "💡 Get your FREE Groq API key (30 seconds, no credit card):\nhttps://console.groq.com\n\nThen click 'Use Other User' to configure it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
             }
         }
         
@@ -133,18 +210,60 @@ fun JiraIntegrationScreen(
         // Generated Test Cases
         if (uiState.generatedTestCases.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Generated Test Cases (${uiState.generatedTestCases.size})",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            
-            uiState.generatedTestCases.forEachIndexed { index, testCase ->
-                TestCaseCard(
-                    testCase = testCase,
-                    index = index + 1,
-                    modifier = Modifier.padding(vertical = 4.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Generated Test Cases (${uiState.generatedTestCases.size})",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
                 )
+                if (uiState.usingAI) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = "🤖 AI Generated",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                } else {
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = "📋 Rule-Based",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+            
+            // Display test cases in a scrollable list
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 600.dp), // Limit height for better scrolling
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    items = uiState.generatedTestCases,
+                    key = { it.title }
+                ) { testCase ->
+                    TestCaseCard(
+                        testCase = testCase,
+                        index = uiState.generatedTestCases.indexOf(testCase) + 1,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -191,6 +310,9 @@ fun JiraIntegrationScreen(
                 // Close dialog after a short delay to allow state to update
                 // The error will be shown in the main UI if configuration fails
                 showConfigDialog = false
+            },
+            onSaveGemini = { apiKey ->
+                viewModel.configureOpenAI(apiKey)
             }
         )
     }
@@ -210,23 +332,77 @@ fun TestCaseCard(
     index: Int,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "TC-$index",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Surface(
+                    color = when (testCase.priority.lowercase()) {
+                        "high" -> MaterialTheme.colorScheme.errorContainer
+                        "medium" -> MaterialTheme.colorScheme.tertiaryContainer
+                        else -> MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = testCase.priority,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = when (testCase.priority.lowercase()) {
+                            "high" -> MaterialTheme.colorScheme.onErrorContainer
+                            "medium" -> MaterialTheme.colorScheme.onTertiaryContainer
+                            else -> MaterialTheme.colorScheme.onSecondaryContainer
+                        }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "$index. ${testCase.title}",
-                style = MaterialTheme.typography.titleSmall,
+                text = testCase.title,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = testCase.description,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodyMedium
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            if (testCase.steps.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Steps:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                testCase.steps.forEachIndexed { stepIndex, step ->
+                    Text(
+                        text = "${stepIndex + 1}. $step",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Priority: ${testCase.priority}",
+                text = "Expected: ${testCase.expectedResult}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium
             )
         }
     }
@@ -235,11 +411,14 @@ fun TestCaseCard(
 @Composable
 fun JiraConfigDialog(
     onDismiss: () -> Unit,
-    onSave: (String, String, String) -> Unit
+    onSave: (String, String, String) -> Unit,
+    onSaveGemini: ((String) -> Unit)? = null
 ) {
     var baseUrl by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var apiToken by remember { mutableStateOf("") }
+    var openAIApiKey by remember { mutableStateOf("") }
+    var showGeminiSection by remember { mutableStateOf(false) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -273,6 +452,36 @@ fun JiraConfigDialog(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp)
                 )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "AI-Powered Test Generation (Optional)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Enable AI (Groq - Free) for intelligent test case generation. Get free API key at https://console.groq.com (optional but recommended)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = openAIApiKey,
+                    onValueChange = { openAIApiKey = it },
+                    label = { Text("Groq API Key (Optional - Free)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = PasswordVisualTransformation(),
+                    placeholder = { Text("Leave empty to use rule-based generation") }
+                )
+                Text(
+                    text = "Get free API key: https://console.groq.com\n(Completely free, no credit card needed)",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
         },
         confirmButton = {
@@ -281,9 +490,13 @@ fun JiraConfigDialog(
                     val trimmedBaseUrl = baseUrl.trim()
                     val trimmedEmail = email.trim()
                     val trimmedToken = apiToken.trim()
+                    val trimmedOpenAIKey = openAIApiKey.trim()
                     
                     if (trimmedBaseUrl.isNotEmpty() && trimmedEmail.isNotEmpty() && trimmedToken.isNotEmpty()) {
                         onSave(trimmedBaseUrl, trimmedEmail, trimmedToken)
+                        if (trimmedOpenAIKey.isNotEmpty() && onSaveGemini != null) {
+                            onSaveGemini(trimmedOpenAIKey)
+                        }
                     }
                 },
                 enabled = baseUrl.trim().isNotEmpty() && email.trim().isNotEmpty() && apiToken.trim().isNotEmpty()

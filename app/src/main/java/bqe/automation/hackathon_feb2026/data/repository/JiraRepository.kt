@@ -47,9 +47,38 @@ class JiraRepository(
     }
     
     suspend fun generateTestCases(issue: JiraIssue): List<GeneratedTestCase> {
+        val summary = issue.fields.summary
+        val description = issue.fields.getDescriptionText()
+        val acceptanceCriteria = issue.fields.getAcceptanceCriteriaText()
+        
+        // Combine summary and description - summary is often the main issue description
+        val fullDescription = buildString {
+            if (summary.isNotBlank()) {
+                append(summary)
+            }
+            if (description != null && description.isNotBlank()) {
+                // Only append if description is different from summary (to avoid duplication)
+                val descText = description.trim()
+                val summaryText = summary.trim()
+                if (descText != summaryText && !descText.contains(summaryText)) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(descText)
+                }
+            }
+        }
+        
+        println("=== JIRA REPOSITORY: Extracted Information ===")
+        println("Summary: $summary")
+        println("Description: ${description ?: "NULL"}")
+        println("Full Description (combined): $fullDescription")
+        println("Full Description length: ${fullDescription.length}")
+        println("Acceptance Criteria: ${acceptanceCriteria ?: "NULL"}")
+        println("Acceptance Criteria length: ${acceptanceCriteria?.length ?: 0}")
+        println("===============================================")
+        
         return testCaseGenerator.generateTestCases(
-            storyDescription = issue.fields.getDescriptionText(),
-            acceptanceCriteria = issue.fields.getAcceptanceCriteriaText()
+            storyDescription = if (fullDescription.isNotBlank()) fullDescription else null,
+            acceptanceCriteria = acceptanceCriteria
         )
     }
     

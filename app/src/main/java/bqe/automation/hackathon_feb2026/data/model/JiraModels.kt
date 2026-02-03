@@ -20,7 +20,13 @@ data class JiraFields(
 ) {
     // Helper function to extract plain text from description
     fun getDescriptionText(): String? {
-        return description?.let { extractTextFromJson(it) }
+        val extracted = description?.let { extractTextFromJson(it) }
+        println("=== ADF EXTRACTION: Description ===")
+        println("Raw description element: ${description?.toString()?.take(200)}")
+        println("Extracted text: ${extracted ?: "NULL"}")
+        println("Extracted text length: ${extracted?.length ?: 0}")
+        println("===================================")
+        return extracted
     }
     
     // Helper function to extract plain text from acceptance criteria
@@ -37,6 +43,12 @@ data class JiraFields(
                 val obj = element.asJsonObject
                 // Handle ADF format
                 when {
+                    // Root "doc" type - extract content array
+                    obj.has("type") && obj.get("type").asString == "doc" && obj.has("content") -> {
+                        obj.getAsJsonArray("content")
+                            .mapNotNull { extractTextFromJson(it) }
+                            .joinToString("")
+                    }
                     // Paragraph node
                     obj.has("type") && obj.get("type").asString == "paragraph" && obj.has("content") -> {
                         obj.getAsJsonArray("content")
@@ -46,6 +58,10 @@ data class JiraFields(
                     // Text node
                     obj.has("text") && obj.get("text").isJsonPrimitive -> {
                         obj.get("text").asString
+                    }
+                    // Media nodes - skip but add note
+                    obj.has("type") && (obj.get("type").asString == "mediaSingle" || obj.get("type").asString == "media") -> {
+                        "[Media attachment]"
                     }
                     // Content array
                     obj.has("content") && obj.get("content").isJsonArray -> {

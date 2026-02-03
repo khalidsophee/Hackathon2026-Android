@@ -2,9 +2,50 @@ package bqe.automation.hackathon_feb2026.domain
 
 import bqe.automation.hackathon_feb2026.data.model.GeneratedTestCase
 
-class TestCaseGenerator {
+class TestCaseGenerator(
+    private val useLLM: Boolean = false,
+    private val llmGenerator: LLMTestCaseGenerator? = null
+) {
     
-    fun generateTestCases(
+    suspend fun generateTestCases(
+        storyDescription: String?,
+        acceptanceCriteria: String?
+    ): List<GeneratedTestCase> {
+        println("=== TEST CASE GENERATOR: Received Input ===")
+        println("Story Description: ${storyDescription ?: "NULL"}")
+        println("Story Description length: ${storyDescription?.length ?: 0}")
+        println("Acceptance Criteria: ${acceptanceCriteria ?: "NULL"}")
+        println("Acceptance Criteria length: ${acceptanceCriteria?.length ?: 0}")
+        println("Use LLM: $useLLM")
+        println("LLM Generator available: ${llmGenerator != null}")
+        println("============================================")
+        
+        // Try LLM first if enabled
+        if (useLLM && llmGenerator != null) {
+            println("✅ LLM is ENABLED - Calling ChatGPT...")
+            val llmTestCases = llmGenerator.generateTestCasesWithLLM(storyDescription, acceptanceCriteria)
+            // Use LLM results if we got any test cases
+            if (llmTestCases.isNotEmpty()) {
+                println("✅ LLM generated ${llmTestCases.size} test cases")
+                return llmTestCases
+            } else {
+                println("❌ LLM returned empty, falling back to rule-based")
+            }
+            // Fallback to rule-based if LLM fails
+        } else {
+            println("❌ LLM is DISABLED or not available - using rule-based generation")
+            println("   useLLM = $useLLM")
+            println("   llmGenerator = ${if (llmGenerator != null) "available" else "NULL"}")
+        }
+        
+        // Use rule-based generation
+        println("Using rule-based generation...")
+        val ruleBasedTestCases = generateTestCasesRuleBased(storyDescription, acceptanceCriteria)
+        println("Rule-based generated ${ruleBasedTestCases.size} test cases")
+        return ruleBasedTestCases
+    }
+    
+    private fun generateTestCasesRuleBased(
         storyDescription: String?,
         acceptanceCriteria: String?
     ): List<GeneratedTestCase> {
@@ -13,7 +54,7 @@ class TestCaseGenerator {
         // Extract acceptance criteria
         val criteria = parseAcceptanceCriteria(acceptanceCriteria)
         
-        // Generate test cases from acceptance criteria
+        // Generate test cases from acceptance criteria - ONE PER CRITERION
         criteria.forEachIndexed { index, criterion ->
             testCases.add(
                 GeneratedTestCase(
@@ -26,10 +67,10 @@ class TestCaseGenerator {
             )
         }
         
-        // Generate additional test cases from story description
-        if (storyDescription != null) {
-            val additionalTests = generateFromDescription(storyDescription)
-            testCases.addAll(additionalTests)
+        // Don't generate generic test cases - only use acceptance criteria or LLM
+        if (testCases.isEmpty()) {
+            println("⚠️ No test cases generated from acceptance criteria.")
+            println("   ⚠️ Please configure OpenAI API key to generate test cases from description.")
         }
         
         return testCases
@@ -41,56 +82,68 @@ class TestCaseGenerator {
         val parsedCriteria = mutableListOf<Criterion>()
         
         // Try to parse different formats
-        // Format 1: Bullet points with "Given-When-Then" or "As a... I want... So that..."
-        val lines = criteria.split("\n").map { it.trim() }
-        
-        var currentCriterion: Criterion? = null
+        val lines = criteria.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
         
         lines.forEach { line ->
             when {
-                line.startsWith("-") || line.startsWith("*") || line.startsWith("•") -> {
-                    val content = line.removePrefix("-").removePrefix("*").removePrefix("•").trim()
+                // Bullet points: -, *, •, or other bullet characters
+                line.matches(Regex("^[-*•▪▫◦‣⁃]\\s+.+")) -> {
+                    val content = line.replaceFirst(Regex("^[-*•▪▫◦‣⁃]\\s+"), "").trim()
                     if (content.isNotEmpty()) {
-                        currentCriterion = Criterion(
-                            summary = extractSummary(content),
-                            description = content,
-                            steps = extractSteps(content),
-                            expectedResult = extractExpectedResult(content)
-                        )
-                        parsedCriteria.add(currentCriterion)
+                        parsedCriteria.add(createCriterion(content))
                     }
                 }
-                line.matches(Regex("\\d+\\.")) || line.matches(Regex("\\d+\\)")) -> {
-                    val content = line.substringAfter(".").substringAfter(")").trim()
+                // Numbered lists: 1., 2., 1), 2), etc.
+                line.matches(Regex("^\\d+[.)]\\s+.+")) -> {
+                    val content = line.replaceFirst(Regex("^\\d+[.)]\\s+"), "").trim()
                     if (content.isNotEmpty()) {
-                        currentCriterion = Criterion(
-                            summary = extractSummary(content),
-                            description = content,
-                            steps = extractSteps(content),
-                            expectedResult = extractExpectedResult(content)
-                        )
-                        parsedCriteria.add(currentCriterion)
+                        parsedCriteria.add(createCriterion(content))
                     }
+                }
+                // Lines starting with "AC", "AC:", "Given", "When", "Then"
+                line.matches(Regex("^(AC|AC:|Given|When|Then|And|But):?\\s+.+", RegexOption.IGNORE_CASE)) -> {
+                    val content = line.replaceFirst(Regex("^(AC|AC:|Given|When|Then|And|But):?\\s+", RegexOption.IGNORE_CASE), "").trim()
+                    if (content.isNotEmpty()) {
+                        parsedCriteria.add(createCriterion(content))
+                    }
+                }
+                // Lines that look like criteria (contain keywords)
+                line.length > 10 && (line.contains("should", ignoreCase = true) || 
+                                    line.contains("must", ignoreCase = true) ||
+                                    line.contains("verify", ignoreCase = true) ||
+                                    line.contains("ensure", ignoreCase = true)) -> {
+                    parsedCriteria.add(createCriterion(line))
                 }
             }
         }
         
-        // If no structured format found, create one test case per sentence
+        // If no structured format found, split by sentences or common separators
         if (parsedCriteria.isEmpty()) {
-            val sentences = criteria.split(Regex("[.!?]")).map { it.trim() }.filter { it.isNotEmpty() }
-            sentences.forEach { sentence ->
-                parsedCriteria.add(
-                    Criterion(
-                        summary = extractSummary(sentence),
-                        description = sentence,
-                        steps = listOf("Navigate to the feature", "Perform the action", "Verify the result"),
-                        expectedResult = "Expected behavior is achieved"
-                    )
-                )
+            // Try splitting by multiple newlines first
+            val paragraphs = criteria.split(Regex("\n{2,}")).map { it.trim() }.filter { it.isNotEmpty() }
+            if (paragraphs.size > 1) {
+                paragraphs.forEach { paragraph ->
+                    parsedCriteria.add(createCriterion(paragraph))
+                }
+            } else {
+                // Split by sentences
+                val sentences = criteria.split(Regex("[.!?]")).map { it.trim() }.filter { it.isNotEmpty() && it.length > 10 }
+                sentences.forEach { sentence ->
+                    parsedCriteria.add(createCriterion(sentence))
+                }
             }
         }
         
         return parsedCriteria
+    }
+    
+    private fun createCriterion(content: String): Criterion {
+        return Criterion(
+            summary = extractSummary(content),
+            description = content,
+            steps = extractSteps(content),
+            expectedResult = extractExpectedResult(content)
+        )
     }
     
     private fun extractSummary(text: String): String {
@@ -135,41 +188,12 @@ class TestCaseGenerator {
     }
     
     private fun generateFromDescription(description: String): List<GeneratedTestCase> {
-        val testCases = mutableListOf<GeneratedTestCase>()
-        
-        // Generate positive test case
-        testCases.add(
-            GeneratedTestCase(
-                title = "TC-Positive: Verify basic functionality",
-                description = "Verify that the feature works correctly with valid inputs",
-                steps = listOf(
-                    "Open the application",
-                    "Navigate to the feature",
-                    "Perform valid actions",
-                    "Verify successful completion"
-                ),
-                expectedResult = "Feature works as expected",
-                priority = "High"
-            )
-        )
-        
-        // Generate negative test case
-        testCases.add(
-            GeneratedTestCase(
-                title = "TC-Negative: Verify error handling",
-                description = "Verify that the feature handles invalid inputs gracefully",
-                steps = listOf(
-                    "Open the application",
-                    "Navigate to the feature",
-                    "Perform invalid actions",
-                    "Verify error message is displayed"
-                ),
-                expectedResult = "Appropriate error message is shown",
-                priority = "Medium"
-            )
-        )
-        
-        return testCases
+        // Return empty list - we don't want fixed/predefined test cases
+        // Only use LLM or acceptance criteria-based generation
+        println("⚠️ Rule-based generation called but no acceptance criteria found. Returning empty list.")
+        println("   Description: ${description.take(100)}...")
+        println("   ⚠️ Please configure OpenAI API key to generate test cases from description.")
+        return emptyList()
     }
     
     private data class Criterion(
