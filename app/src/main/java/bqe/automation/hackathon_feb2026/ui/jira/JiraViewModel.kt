@@ -61,14 +61,38 @@ class JiraViewModel(
     
     fun configureOpenAI(apiKey: String) {
         try {
-            bqe.automation.hackathon_feb2026.data.network.NetworkModule.initializeOpenAI(apiKey)
-            bqe.automation.hackathon_feb2026.di.AppModule.resetRepository()
-            _uiState.value = _uiState.value.copy(error = null)
-            } catch (e: Exception) {
+            val trimmedKey = apiKey.trim()
+            println("=== CONFIGURING GROQ API ===")
+            println("API Key length: ${trimmedKey.length}")
+            println("API Key (first 10 chars): ${trimmedKey.take(10)}...")
+            
+            if (trimmedKey.isEmpty()) {
+                println("⚠️ Warning: Empty API key provided")
                 _uiState.value = _uiState.value.copy(
-                    error = "Failed to configure Groq API: ${e.message}"
+                    error = "Groq API key cannot be empty. Please enter a valid API key from https://console.groq.com"
                 )
+                return
             }
+            
+            bqe.automation.hackathon_feb2026.data.network.NetworkModule.initializeOpenAI(trimmedKey)
+            bqe.automation.hackathon_feb2026.di.AppModule.resetRepository()
+            
+            // Verify the key was set
+            val verifyKey = bqe.automation.hackathon_feb2026.data.network.NetworkModule.openAIApiKey
+            println("✅ API Key configured successfully")
+            println("Verified key length: ${verifyKey.length}")
+            println("Verified key (first 10 chars): ${verifyKey.take(10)}...")
+            
+            _uiState.value = _uiState.value.copy(
+                error = null
+            )
+        } catch (e: Exception) {
+            println("❌ Failed to configure Groq API: ${e.message}")
+            e.printStackTrace()
+            _uiState.value = _uiState.value.copy(
+                error = "Failed to configure Groq API: ${e.message}"
+            )
+        }
     }
     
     fun fetchStory(issueKey: String) {

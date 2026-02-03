@@ -667,7 +667,11 @@ fun JiraConfigDialog(
                     
                     if (trimmedBaseUrl.isNotEmpty() && trimmedEmail.isNotEmpty() && trimmedToken.isNotEmpty()) {
                         onSave(trimmedBaseUrl, trimmedEmail, trimmedToken)
-                        if (trimmedOpenAIKey.isNotEmpty() && onSaveGemini != null) {
+                        // Always call onSaveGemini if provided, even if empty (to clear/reset)
+                        if (onSaveGemini != null) {
+                            println("=== JIRA CONFIG DIALOG: Saving Groq API Key ===")
+                            println("API Key length: ${trimmedOpenAIKey.length}")
+                            println("API Key (first 10 chars): ${trimmedOpenAIKey.take(10)}...")
                             onSaveGemini(trimmedOpenAIKey)
                         }
                     }

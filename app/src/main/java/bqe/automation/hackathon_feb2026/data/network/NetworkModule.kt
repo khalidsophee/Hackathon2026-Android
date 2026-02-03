@@ -102,8 +102,18 @@ object NetworkModule {
         }
     
     fun initializeOpenAI(apiKey: String) {
-        _openAIApiKey = apiKey.trim()
-        _openAIApiService = null
+        val trimmedKey = apiKey.trim()
+        println("=== NETWORK MODULE: Initializing OpenAI/Groq ===")
+        println("API Key length: ${trimmedKey.length}")
+        println("API Key (first 10 chars): ${trimmedKey.take(10)}...")
+        println("API Key (last 10 chars): ...${trimmedKey.takeLast(10)}")
+        
+        _openAIApiKey = trimmedKey
+        _openAIApiService = null // Reset service to pick up new key
+        
+        println("✅ OpenAI/Groq initialized with API key")
+        println("Stored key length: ${_openAIApiKey.length}")
+        println("=============================================")
     }
     
     // Use Groq's free API (no API key needed for basic usage, but we'll use a free key)

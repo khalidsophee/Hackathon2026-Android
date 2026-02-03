@@ -15,8 +15,22 @@ class LLMTestCaseGenerator(
         acceptanceCriteria: String?
     ): List<GeneratedTestCase> {
         if (openAIApiService == null) {
+            println("❌ LLMTestCaseGenerator: openAIApiService is null")
             return emptyList()
         }
+        
+        // Validate API key
+        if (openAIApiKey.isBlank()) {
+            println("❌ LLMTestCaseGenerator: API key is empty or blank")
+            println("   API key length: ${openAIApiKey.length}")
+            println("   Please configure your Groq API key in the app settings")
+            return emptyList()
+        }
+        
+        println("=== LLM TEST CASE GENERATOR ===")
+        println("API Key length: ${openAIApiKey.length}")
+        println("API Key (first 10 chars): ${openAIApiKey.take(10)}...")
+        println("API Key (last 10 chars): ...${openAIApiKey.takeLast(10)}")
         
         return withContext(Dispatchers.IO) {
             try {
@@ -31,8 +45,9 @@ class LLMTestCaseGenerator(
                     max_tokens = 8000 // High token limit to handle detailed test cases
                 )
                 
-                // Use the API key (now set by default)
+                // Use the API key - ensure it's not empty
                 val authHeader = "Bearer $openAIApiKey"
+                println("Authorization header (first 20 chars): ${authHeader.take(20)}...")
                 
                 val response = openAIApiService.generateChatCompletion(
                     authorization = authHeader,
