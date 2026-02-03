@@ -45,7 +45,38 @@ fun JiraIntegrationScreen(
             TextButton(
                 onClick = { showConfigDialog = true }
             ) {
-                Text("Use Other User")
+                Text("Configure")
+            }
+        }
+        
+        // Show configuration prompt if not configured
+        if (!uiState.jiraConfigured) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "⚙️ Configuration Required",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Please configure your Jira credentials and Groq API key (optional) to get started.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { showConfigDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Configure Now")
+                    }
+                }
             }
         }
         
