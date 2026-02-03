@@ -85,15 +85,23 @@ class JiraRepository(
     suspend fun createTestCaseInJira(
         projectKey: String,
         testCase: GeneratedTestCase,
-        parentIssueKey: String?
+        parentIssueKey: String?,
+        fallbackProjectId: String? = null
     ): Result<CreatedTestCase> {
         return try {
             val descriptionText = formatTestCaseDescription(testCase, parentIssueKey)
             val descriptionADF = ADFConverter.textToADF(descriptionText)
             
+            // Try with project key first, fallback to project ID if provided
+            val project = if (fallbackProjectId != null) {
+                JiraProjectKey(id = fallbackProjectId)
+            } else {
+                JiraProjectKey(key = projectKey)
+            }
+            
             val request = CreateTestCaseRequest(
                 fields = TestCaseFields(
-                    project = JiraProjectKey(projectKey),
+                    project = project,
                     summary = testCase.title,
                     description = descriptionADF,
                     issuetype = JiraIssueTypeKey("Test")
@@ -113,7 +121,15 @@ class JiraRepository(
                         val messages = mutableListOf<String>()
                         errorResponse.errorMessages?.let { messages.addAll(it) }
                         errorResponse.errors?.forEach { (field, message) ->
-                            messages.add("$field: $message")
+                            if (field == "project" && message.contains("valid project")) {
+                                messages.add("Project '$projectKey' not found or you don't have permission to create issues in it.\n" +
+                                        "Please verify:\n" +
+                                        "1. The project key is correct (check in Jira)\n" +
+                                        "2. You have permission to create issues in this project\n" +
+                                        "3. The project exists and is accessible")
+                            } else {
+                                messages.add("$field: $message")
+                            }
                         }
                         if (messages.isNotEmpty()) {
                             messages.joinToString("\n")
@@ -134,8 +150,9 @@ class JiraRepository(
     }
     
     private fun formatTestCaseDescription(testCase: GeneratedTestCase, parentIssueKey: String?): String {
+        // Format steps with clear numbering
         val stepsText = testCase.steps.mapIndexed { index, step ->
-            "${index + 1}. $step"
+            "Step ${index + 1}: $step"
         }.joinToString("\n")
         
         val parentLink = if (parentIssueKey != null) {
@@ -144,16 +161,20 @@ class JiraRepository(
             ""
         }
         
+        // Create a well-structured description with steps and execution details
         return """
             |${testCase.description}
             |
-            |Steps:
+            |=== TEST STEPS ===
             |$stepsText
             |
-            |Expected Result:
+            |=== EXPECTED RESULT ===
             |${testCase.expectedResult}
             |
-            |Priority: ${testCase.priority}$parentLink
+            |=== TEST EXECUTION ===
+            |Status: Not Executed
+            |Priority: ${testCase.priority}
+            |$parentLink
         """.trimMargin()
     }
 }

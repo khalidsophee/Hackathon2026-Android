@@ -268,16 +268,58 @@ fun JiraIntegrationScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
+            // Project selection for test cases
+            val storyProjectKey = uiState.story?.fields?.project?.key ?: "AND"
+            var testCaseProjectKey by remember { mutableStateOf("XRM") }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Create Test Cases in Jira",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = testCaseProjectKey,
+                        onValueChange = { testCaseProjectKey = it.uppercase() },
+                        label = { Text("Project Key (e.g., XRM)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("XRM") },
+                        singleLine = true
+                    )
+                    Text(
+                        text = "Test cases will be created in the specified project with steps and execution details",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    if (uiState.story != null) {
+                        Text(
+                            text = "💡 Tip: If XRM project doesn't exist, try using '$storyProjectKey' (from the story) or verify the project key in Jira",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+            
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = { viewModel.createTestCasesInJira() },
+                    onClick = { viewModel.createTestCasesInJira(testCaseProjectKey.uppercase().trim()) },
                     modifier = Modifier.weight(1f),
-                    enabled = !uiState.isLoading
+                    enabled = !uiState.isLoading && testCaseProjectKey.isNotBlank()
                 ) {
-                    Text("Create in Jira")
+                    Text("Create in Jira (${testCaseProjectKey.uppercase()})")
                 }
                 
                 Button(

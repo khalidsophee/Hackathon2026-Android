@@ -99,6 +99,7 @@ data class JiraIssueType(
 
 data class JiraProject(
     val key: String,
+    val id: String? = null,
     val name: String
 )
 
@@ -117,8 +118,13 @@ data class TestCaseFields(
 )
 
 data class JiraProjectKey(
-    val key: String
-)
+    val key: String? = null,
+    val id: String? = null
+) {
+    init {
+        require(key != null || id != null) { "Either project key or project id must be provided" }
+    }
+}
 
 data class JiraIssueTypeKey(
     val name: String = "Test"
